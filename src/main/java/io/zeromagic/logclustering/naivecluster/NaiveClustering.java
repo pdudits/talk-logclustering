@@ -14,7 +14,7 @@ public class NaiveClustering<T> {
         this.threshold = threshold;
     }
 
-    public void add(T member) {
+    public synchronized void add(T member) {
         var bestMatch = clusters.parallelStream()
                 .filter(c -> metric.distance(c.leader(), member) < threshold)
                 .sorted(Comparator.comparingDouble(c -> metric.distance(c.leader(), member)))

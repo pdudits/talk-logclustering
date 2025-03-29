@@ -14,6 +14,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -74,7 +78,7 @@ public class App {
 
             @Override
             public double threshold() {
-                return 0.12;
+                return 0.08;
             }
         });
     }
@@ -83,7 +87,9 @@ public class App {
                             Process<T> process) throws IOException {
         var clustering = new NaiveClustering<>(process::distance, process.threshold());
         var start = Instant.now();
-        JsonArrayInput.process(input, e -> clustering.add(process.process(e)));
+        JsonArrayInput.process(input, e -> CompletableFuture.supplyAsync(
+                () -> process.process(e)).thenAccept(clustering::add));
+        ForkJoinPool.commonPool().awaitQuiescence(1, TimeUnit.MINUTES);
         var end = Instant.now();
         System.out.format("Clustering took %s\n", Duration.between(start, end));
         new Report<>(clustering.getClusters(), process::entry).report(output, 20, 0.2);
