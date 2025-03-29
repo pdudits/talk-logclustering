@@ -31,23 +31,68 @@ public class App {
     }
 
     static void termVectorProcess(FileReader input, Path output) throws IOException {
-        process(input, output, e -> TermVector.of(e, Tokenizer.SIMPLE), TermVector::cosineDistance, TermVector::source);
+        process(input, output, new Process<TermVector>() {
+
+            @Override
+            public TermVector process(LogEntry entry) {
+                return TermVector.of(entry, Tokenizer.SIMPLE);
+            }
+
+            @Override
+            public double distance(TermVector t1, TermVector t2) {
+                return t1.cosineDistance(t2);
+            }
+
+            @Override
+            public LogEntry entry(TermVector termVector) {
+                return termVector.source();
+            }
+
+            @Override
+            public double threshold() {
+                return 0.3;
+            }
+        });
     }
     static void embeddingProcess(FileReader input, Path output) throws IOException {
         var model = new EmbeddingProcess();
-        process(input, output, model::process, EmbeddingVector::cosineDistance, EmbeddingVector::entry);
+        process(input, output, new Process<EmbeddingVector>() {
+            @Override
+            public EmbeddingVector process(LogEntry entry) {
+                return model.process(entry);
+            }
+
+            @Override
+            public double distance(EmbeddingVector t1, EmbeddingVector t2) {
+                return t1.cosineDistance(t2);
+            }
+
+            @Override
+            public LogEntry entry(EmbeddingVector t) {
+                return t.entry();
+            }
+
+            @Override
+            public double threshold() {
+                return 0.12;
+            }
+        });
     }
 
     static <T> void process(FileReader input, Path output,
-                            Function<LogEntry, T> processor,
-                            Metric<T> metric,
-                            Function<T, LogEntry> extractor) throws IOException {
-        var clustering = new NaiveClustering<>(metric, 0.3);
+                            Process<T> process) throws IOException {
+        var clustering = new NaiveClustering<>(process::distance, process.threshold());
         var start = Instant.now();
-        JsonArrayInput.process(input, e -> clustering.add(processor.apply(e)));
+        JsonArrayInput.process(input, e -> clustering.add(process.process(e)));
         var end = Instant.now();
         System.out.format("Clustering took %s\n", Duration.between(start, end));
-        new Report<>(clustering.getClusters(), extractor).report(output, 20, 0.2);
+        new Report<>(clustering.getClusters(), process::entry).report(output, 20, 0.2);
     }
 
+    interface Process<T> {
+        T process(LogEntry entry);
+        double distance(T t1, T t2);
+        LogEntry entry(T t);
+        double threshold();
+    }
 }
