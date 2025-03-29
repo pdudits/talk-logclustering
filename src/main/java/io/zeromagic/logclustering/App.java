@@ -3,7 +3,6 @@ package io.zeromagic.logclustering;
 import io.zeromagic.logclustering.input.JsonArrayInput;
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;
-import io.zeromagic.logclustering.naivecluster.Metric;
 import io.zeromagic.logclustering.naivecluster.NaiveClustering;
 import io.zeromagic.logclustering.vector.EmbeddingProcess;
 import io.zeromagic.logclustering.vector.EmbeddingVector;
@@ -18,23 +17,21 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 /**
  * Hello world!
  */
 public class App {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         var input = Path.of("../sensitive.data/o4.json");
-        var output = Path.of("target/clusters/");
 
         try (var in = new FileReader(input.toFile())) {
-            // termVectorProcess(in, output.resolve("target/termvector-clusters"));
-            embeddingProcess(in, output.resolve("target/embedding-clusters"));
+            //termVectorProcess(in, Path.of("target/termvector-clusters"));
+            embeddingProcess(in, Path.of("target/embedding-cluster/"));
         }
     }
 
-    static void termVectorProcess(FileReader input, Path output) throws IOException {
+    static void termVectorProcess(FileReader input, Path output) throws IOException, InterruptedException {
         process(input, output, new Process<TermVector>() {
 
             @Override
@@ -54,11 +51,11 @@ public class App {
 
             @Override
             public double threshold() {
-                return 0.3;
+                return 0.35;
             }
         });
     }
-    static void embeddingProcess(FileReader input, Path output) throws IOException {
+    static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException {
         var model = new EmbeddingProcess();
         process(input, output, new Process<EmbeddingVector>() {
             @Override
@@ -84,12 +81,14 @@ public class App {
     }
 
     static <T> void process(FileReader input, Path output,
-                            Process<T> process) throws IOException {
+                            Process<T> process) throws IOException, InterruptedException {
         var clustering = new NaiveClustering<>(process::distance, process.threshold());
         var start = Instant.now();
+        var executor = Executors.newFixedThreadPool(ForkJoinPool.getCommonPoolParallelism());
         JsonArrayInput.process(input, e -> CompletableFuture.supplyAsync(
-                () -> process.process(e)).thenAccept(clustering::add));
-        ForkJoinPool.commonPool().awaitQuiescence(1, TimeUnit.MINUTES);
+                () -> process.process(e), executor).thenAccept(clustering::add));
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.MINUTES);
         var end = Instant.now();
         System.out.format("Clustering took %s\n", Duration.between(start, end));
         new Report<>(clustering.getClusters(), process::entry).report(output, 20, 0.2);
