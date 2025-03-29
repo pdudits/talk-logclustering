@@ -1,15 +1,16 @@
 package io.zeromagic.logclustering.vector;
 
-import dev.langchain4j.model.embedding.onnx.e5smallv2.E5SmallV2EmbeddingModel;
+import dev.langchain4j.model.embedding.DimensionAwareEmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.e5smallv2q.E5SmallV2QuantizedEmbeddingModel;
 import io.zeromagic.logclustering.input.LogEntry;
 
 public class EmbeddingProcess {
 
-    private final E5SmallV2EmbeddingModel model;
+    private final DimensionAwareEmbeddingModel model;
     private int counter = 0;
 
     public EmbeddingProcess() {
-        this.model = new E5SmallV2EmbeddingModel();
+        this.model = new E5SmallV2QuantizedEmbeddingModel();
     }
 
     public EmbeddingVector process(LogEntry logEntry) {
