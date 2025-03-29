@@ -30,7 +30,7 @@ public class Report {
                 var random = new Random();
                 var indices = IntStream.generate(() -> random.nextInt(cluster.members().size()))
                         .distinct()
-                        .limit(Math.max(1,Math.min((long)(cluster.members().size() * sampleRate), maxExamples)))
+                        .limit(Math.max(1,Math.min(Math.round(cluster.members().size() * sampleRate), maxExamples)))
                         .toArray();
                 Arrays.stream(indices).mapToObj(i -> cluster.members().get(i)).forEach(tv -> {
                     try {
