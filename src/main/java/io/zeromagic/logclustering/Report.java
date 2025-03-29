@@ -1,5 +1,6 @@
 package io.zeromagic.logclustering;
 
+import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.naivecluster.Cluster;
 import io.zeromagic.logclustering.simple.TermVector;
 
@@ -11,14 +12,17 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
-public class Report {
-    private final List<Cluster<TermVector>> clustering;
+public class Report<T> {
+    private final List<Cluster<T>> clustering;
+    private final Function<T, LogEntry> entryExtractor;
     private final Random rand = new Random();
 
-    public Report(List<Cluster<TermVector>> clustering) {
+    public Report(List<Cluster<T>> clustering, Function<T, LogEntry> entryExtractor) {
         this.clustering = new ArrayList<>(clustering);
+        this.entryExtractor = entryExtractor;
         Collections.sort(this.clustering, Comparator.comparingInt(c -> c.members().size()));
     }
 
@@ -77,23 +81,22 @@ public class Report {
 
     }
 
-    private void writeExamples(Cluster<TermVector> cluster, long samples, Appendable writer, int index) throws IOException {
+    private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index) throws IOException {
         writer.append("Cluster #%3d, size %6d\n-------------------------\n\n".formatted(index, cluster.members().size()));
         IntStream.generate(() -> rand.nextInt(cluster.members().size()))
                 .distinct()
                 .limit(samples)
                 .mapToObj(i -> cluster.members().get(i))
-                .forEach(tv -> {
+                .forEach(member -> {
                     try {
-                        write(writer, tv);
+                        write(writer, entryExtractor.apply(member));
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 });
     }
 
-    private void write(Appendable out, TermVector termVector) throws IOException {
-        var e = termVector.source();
+    private void write(Appendable out, LogEntry e) throws IOException {
         var meta = e.metadata();
         out.append(meta.get("Pod")).append(" ");
         out.append("[").append(meta.get("Timestamp")).append("] ")

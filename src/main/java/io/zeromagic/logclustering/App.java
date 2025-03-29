@@ -20,14 +20,14 @@ public class App {
         var output = Path.of("target/clusters/");
 
         try (var in = new FileReader(input.toFile())) {
-            var clustering = new NaiveClustering<TermVector>(TermVector::cosineDistance, 0.3);
+            var clustering = new NaiveClustering<>(TermVector::cosineDistance, 0.3);
             var start = Instant.now();
             JsonArrayInput.process(in, e -> clustering.add(TermVector.of(e, Tokenizer.SIMPLE)));
             var end = Instant.now();
 
             System.out.format("Clustering took %s\n", Duration.between(start, end));
 
-            new Report(clustering.getClusters()).report(output, 20, 0.2);
+            new Report<>(clustering.getClusters(), TermVector::source).report(output, 20, 0.2);
         }
     }
 }
