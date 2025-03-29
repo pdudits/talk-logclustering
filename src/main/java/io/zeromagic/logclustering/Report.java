@@ -2,7 +2,6 @@ package io.zeromagic.logclustering;
 
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.naivecluster.Cluster;
-import io.zeromagic.logclustering.simple.TermVector;
 
 import java.io.IOException;
 import java.nio.file.Files;

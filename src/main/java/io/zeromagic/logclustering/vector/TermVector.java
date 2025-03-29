@@ -1,4 +1,4 @@
-package io.zeromagic.logclustering.simple;
+package io.zeromagic.logclustering.vector;
 
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;

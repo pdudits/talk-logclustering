@@ -3,7 +3,7 @@ package io.zeromagic.logclustering;
 import io.zeromagic.logclustering.input.JsonArrayInput;
 import io.zeromagic.logclustering.input.Tokenizer;
 import io.zeromagic.logclustering.naivecluster.NaiveClustering;
-import io.zeromagic.logclustering.simple.TermVector;
+import io.zeromagic.logclustering.vector.TermVector;
 
 import java.io.FileReader;
 import java.io.IOException;

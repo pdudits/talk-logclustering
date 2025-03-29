@@ -2,7 +2,7 @@ package io.zeromagic.logclustering;
 
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;
-import io.zeromagic.logclustering.simple.TermVector;
+import io.zeromagic.logclustering.vector.TermVector;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
