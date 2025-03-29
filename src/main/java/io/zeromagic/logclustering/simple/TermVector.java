@@ -2,7 +2,6 @@ package io.zeromagic.logclustering.simple;
 
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;
-import io.zeromagic.logclustering.naivecluster.Metric;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +38,7 @@ public class TermVector {
             result += entry.getValue() * entry.getValue();
         }
         magnitude = Math.sqrt(result);
-        return result;
+        return magnitude;
     }
 
     public LogEntry source() {
