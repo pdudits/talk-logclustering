@@ -45,7 +45,7 @@ public class TermVector {
        return source;
     }
 
-    public double cosineSimilarity(TermVector other) {
+    public double cosineDistance(TermVector other) {
         return 1 - dotProduct(other) / (magnitude() * other.magnitude());
     }
 
