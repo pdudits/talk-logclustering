@@ -24,7 +24,13 @@ public class NaiveClustering<T> {
             bestMatch.get().members().add(member);
         } else try {
             lock.writeLock().lock();
-            clusters.add(Cluster.of(member));
+            // Check again in case another thread added a cluster
+            bestMatch = findMatch(member);
+            if (bestMatch.isPresent()) {
+                bestMatch.get().members().add(member);
+            } else {
+                clusters.add(Cluster.of(member));
+            }
         } finally {
             lock.writeLock().unlock();
         }

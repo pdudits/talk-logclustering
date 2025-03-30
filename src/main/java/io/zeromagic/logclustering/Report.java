@@ -36,14 +36,23 @@ public class Report<T> {
             var index = (int) Math.round((i + 1) * 0.1 * (clustering.size() - 1));
             percentiles[i] = clustering.get(index).members().size();
         }
+        var entryPercentile = new int[10];
+        int runningTotal = 0;
+        for (var cluster : clustering) {
+            runningTotal += cluster.members().size();
+            int index = (totalMessages - runningTotal) * entryPercentile.length / totalMessages;
+            for(int i = index; i < entryPercentile.length; i++) {
+                entryPercentile[i]++;
+            }
+        }
 
         System.out.format("Total messages: %8d\n", totalMessages)
                 .format("Total clusters: %8d\n\n", totalClusters)
-                .append("| Percentile | Cluster Size |\n")
-                .append("|------------|--------------|\n");
+                .append("| Percentile | Cluster Size | Number of clusters |\n")
+                .append("|------------|--------------|--------------------|\n");
 
         for (int i = 0; i < percentiles.length; i++) {
-            System.out.format("| %9d%% | %12d |\n", (i + 1) * 10, percentiles[i]);
+            System.out.format("| %9d%% | %12d | %18d |\n", (i + 1) * 10, percentiles[i], entryPercentile[i]);
         }
 
         // creaete files with samples.

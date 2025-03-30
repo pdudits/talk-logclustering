@@ -26,8 +26,8 @@ public class App {
         var input = Path.of("../sensitive.data/o4.json");
 
         try (var in = new FileReader(input.toFile())) {
-            //termVectorProcess(in, Path.of("target/termvector-clusters"));
-            embeddingProcess(in, Path.of("target/embedding-cluster/"));
+            termVectorProcess(in, Path.of("target/termvector-clusters"));
+            //embeddingProcess(in, Path.of("target/embedding-cluster/"));
         }
     }
 
