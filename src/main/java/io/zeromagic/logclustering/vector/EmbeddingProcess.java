@@ -8,6 +8,7 @@ public class EmbeddingProcess {
 
     private final DimensionAwareEmbeddingModel model;
     private int counter = 0;
+    private int tokenCount = 0;
 
     public EmbeddingProcess() {
         this.model = new E5SmallV2QuantizedEmbeddingModel();
@@ -16,7 +17,7 @@ public class EmbeddingProcess {
     public EmbeddingVector process(LogEntry logEntry) {
         // small progress indicator, because this is slow on CPU.
         if (++counter % 100 == 0) {
-            System.out.println(counter);
+            System.out.printf("Processed entries: %d, token count: %d\n", counter, tokenCount);
         }
         var m = logEntry.metadata();
         StringBuilder text = new StringBuilder()
@@ -28,7 +29,8 @@ public class EmbeddingProcess {
                 .append(logEntry.body())
                 .append(logEntry.exception());
 
-        var result = model.embed(text.toString()).content();
-        return new EmbeddingVector(result.vector(), logEntry);
+        var result = model.embed(text.toString());
+        tokenCount += result.tokenUsage().inputTokenCount();
+        return new EmbeddingVector(result.content().vector(), logEntry);
     }
 }

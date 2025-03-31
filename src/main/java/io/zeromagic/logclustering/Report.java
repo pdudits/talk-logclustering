@@ -55,16 +55,6 @@ public class Report<T> {
             System.out.format("| %9d%% | %12d | %18d |\n", (i + 1) * 10, percentiles[i], entryPercentile[i]);
         }
 
-        // creaete files with samples.
-        Files.createDirectories(output);
-        // delete any existing files
-        Files.list(output).forEach(f -> {
-            try {
-                Files.delete(f);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
         var index = 0;
         var smallClustersFile = output.resolve("0000-small-clusters.txt");
         try (var smallFilesWriter = Files.newBufferedWriter(smallClustersFile)) {
@@ -86,7 +76,20 @@ public class Report<T> {
                 index++;
             }
         }
+    }
 
+    public void outputClusterMappings(Path output) throws IOException {
+        // output a csv with clusterIndex, entryIndex
+        try (var writer = Files.newBufferedWriter(output.resolve("cluster-mappings.csv"))) {
+            writer.append("ClusterIndex,EntryIndex\n");
+            for (int i = 0; i < clustering.size(); i++) {
+                var cluster = clustering.get(i);
+                for (int j = 0; j < cluster.members().size(); j++) {
+                    var entry = entryExtractor.apply(cluster.members().get(j));
+                    writer.append(String.valueOf(i)).append(",").append(entry.metadata().get("EntryIndex")).append("\n");
+                }
+            }
+        }
     }
 
     private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index) throws IOException {

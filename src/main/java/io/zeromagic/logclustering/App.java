@@ -9,10 +9,14 @@ import io.zeromagic.logclustering.vector.EmbeddingVector;
 import io.zeromagic.logclustering.vector.TermVector;
 
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -26,12 +30,14 @@ public class App {
         var input = Path.of("../sensitive.data/o4.json");
 
         try (var in = new FileReader(input.toFile())) {
-            termVectorProcess(in, Path.of("target/termvector-clusters"));
-            //embeddingProcess(in, Path.of("target/embedding-cluster/"));
+            var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
+            termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
+            embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
         }
     }
 
     static void termVectorProcess(FileReader input, Path output) throws IOException, InterruptedException {
+        prepareOutputDirectory(output);
         process(input, output, new Process<TermVector>() {
 
             @Override
@@ -55,29 +61,41 @@ public class App {
             }
         });
     }
+
     static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException {
+        prepareOutputDirectory(output);
         var model = new EmbeddingProcess();
-        process(input, output, new Process<EmbeddingVector>() {
-            @Override
-            public EmbeddingVector process(LogEntry entry) {
-                return model.process(entry);
-            }
+        try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
+             var out = new EmbeddingOutput(embeddingFile);
+        ) {
+            process(input, output, new Process<EmbeddingVector>() {
+                @Override
+                public EmbeddingVector process(LogEntry entry) {
+                    var v = model.process(entry);
+                    try {
+                        out.write(v, null);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    return v;
+                }
 
-            @Override
-            public double distance(EmbeddingVector t1, EmbeddingVector t2) {
-                return t1.cosineDistance(t2);
-            }
+                @Override
+                public double distance(EmbeddingVector t1, EmbeddingVector t2) {
+                    return t1.cosineDistance(t2);
+                }
 
-            @Override
-            public LogEntry entry(EmbeddingVector t) {
-                return t.entry();
-            }
+                @Override
+                public LogEntry entry(EmbeddingVector embeddingVector) {
+                    return embeddingVector.entry();
+                }
 
-            @Override
-            public double threshold() {
-                return 0.08;
-            }
-        });
+                @Override
+                public double threshold() {
+                    return 0.07;
+                }
+            });
+        }
     }
 
     static <T> void process(FileReader input, Path output,
@@ -91,13 +109,32 @@ public class App {
         executor.awaitTermination(30, TimeUnit.MINUTES);
         var end = Instant.now();
         System.out.format("Clustering took %s\n", Duration.between(start, end));
-        new Report<>(clustering.getClusters(), process::entry).report(output, 20, 0.2);
+        var report = new Report<>(clustering.getClusters(), process::entry);
+        report.report(output, 20, 0.2);
+        report.outputClusterMappings(output);
+    }
+
+    static void prepareOutputDirectory(Path output) throws IOException {
+
+        // creaete files with samples.
+        Files.createDirectories(output);
+        // delete any existing files
+        Files.list(output).forEach(f -> {
+            try {
+                Files.delete(f);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     interface Process<T> {
         T process(LogEntry entry);
+
         double distance(T t1, T t2);
+
         LogEntry entry(T t);
+
         double threshold();
     }
 }
