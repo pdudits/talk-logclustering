@@ -29,6 +29,25 @@ public class Report<T> {
         // create and output basic statistics such as:
         // number of messages, number of clusters, percentile distribution of cluster sizes
 
+        var reportFile = output.resolve("report.txt");
+        try (var reportWriter = Files.newBufferedWriter(reportFile)) {
+            writeStats(reportWriter);
+            writeStats(System.out);
+
+            var index = 0;
+            for (var cluster : clustering) {
+                // pick at most sampleRate..maxExamples random examples from the cluster
+                var samples = Math.max(1, Math.min(Math.round(cluster.members().size() * sampleRate), maxExamples));
+
+                var writer = reportWriter;
+
+                writeExamples(cluster, samples, writer, index);
+                index++;
+            }
+        }
+    }
+
+    private void writeStats(Appendable out) throws IOException {
         var totalMessages = clustering.stream().mapToInt(c -> c.members().size()).sum();
         var totalClusters = clustering.size();
         var percentiles = new int[10];
@@ -41,40 +60,18 @@ public class Report<T> {
         for (var cluster : clustering) {
             runningTotal += cluster.members().size();
             int index = (totalMessages - runningTotal) * entryPercentile.length / totalMessages;
-            for(int i = index; i < entryPercentile.length; i++) {
+            for (int i = index; i < entryPercentile.length; i++) {
                 entryPercentile[i]++;
             }
         }
 
-        System.out.format("Total messages: %8d\n", totalMessages)
-                .format("Total clusters: %8d\n\n", totalClusters)
+        out.append("Total messages: %8d\n".formatted(totalMessages))
+                .append("Total clusters: %8d\n\n".formatted(totalClusters))
                 .append("| Percentile | Cluster Size | Number of clusters |\n")
                 .append("|------------|--------------|--------------------|\n");
 
         for (int i = 0; i < percentiles.length; i++) {
-            System.out.format("| %9d%% | %12d | %18d |\n", (i + 1) * 10, percentiles[i], entryPercentile[i]);
-        }
-
-        var index = 0;
-        var smallClustersFile = output.resolve("0000-small-clusters.txt");
-        try (var smallFilesWriter = Files.newBufferedWriter(smallClustersFile)) {
-            for (var cluster : clustering) {
-                // pick at most sampleRate..maxExamples random examples from the cluster
-                var samples = Math.max(1, Math.min(Math.round(cluster.members().size() * sampleRate), maxExamples));
-
-                var writer = smallFilesWriter;
-
-                if (samples > 3) {
-                    //file name is 3-digit cluster size and then the index
-                    var fileName = String.format("%04d-%03d.txt", cluster.members().size(), index);
-                    writer = Files.newBufferedWriter(output.resolve(fileName));
-                }
-                writeExamples(cluster, samples, writer, index);
-                if (writer != smallFilesWriter) {
-                    writer.close();
-                }
-                index++;
-            }
+            out.append("| %9d%% | %12d | %18d |\n".formatted((i + 1) * 10, percentiles[i], entryPercentile[i]));
         }
     }
 

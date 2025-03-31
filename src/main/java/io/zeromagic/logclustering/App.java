@@ -27,11 +27,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class App {
     public static void main(String[] args) throws IOException, InterruptedException {
-        var input = Path.of("../sensitive.data/o4.json");
+        var input = Path.of("../sensitive.data/25-03.json");
 
+        var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
         try (var in = new FileReader(input.toFile())) {
-            var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
             termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
+        }
+        try (var in = new FileReader(input.toFile())) {
             embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
         }
     }

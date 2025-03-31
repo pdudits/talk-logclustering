@@ -34,6 +34,7 @@ public class JsonArrayInput {
                     }
                 }
                 var throwable = th; // make this effectively final
+                var entryIndex = index.getAndIncrement();
                 consumer.accept(new LogEntry() {
 
                     @Override
@@ -59,7 +60,7 @@ public class JsonArrayInput {
                                 "LoggerName", object.getString("LoggerName"),
                                 "Pod", object.getString("Name"),
                                 "Timestamp", object.getString("Timestamp"),
-                                "EntryIndex", String.valueOf(index.getAndIncrement()));
+                                "EntryIndex", String.valueOf(entryIndex));
                     }
                 });
             }
