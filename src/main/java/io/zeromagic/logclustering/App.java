@@ -17,7 +17,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  * Hello world!
  */
 public class App {
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
         var input = Path.of("../sensitive.data/25-03.json");
 
         var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
@@ -34,11 +38,11 @@ public class App {
             termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
         }
         try (var in = new FileReader(input.toFile())) {
-            embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
+            //embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
         }
     }
 
-    static void termVectorProcess(FileReader input, Path output) throws IOException, InterruptedException {
+    static void termVectorProcess(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         process(input, output, new Process<TermVector>() {
 
@@ -64,7 +68,7 @@ public class App {
         });
     }
 
-    static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException {
+    static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         var model = new EmbeddingProcess(EmbeddingProcess.EmbeddingModel.BGESmall1_5Quantized);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
@@ -80,6 +84,11 @@ public class App {
                         throw new RuntimeException(e);
                     }
                     return v;
+                }
+
+                @Override
+                public List<EmbeddingVector> batchProcess(List<LogEntry> batch) {
+                    return model.processBatch(batch);
                 }
 
                 @Override
@@ -101,19 +110,9 @@ public class App {
     }
 
     static <T> void process(FileReader input, Path output,
-                            Process<T> process) throws IOException, InterruptedException {
-        var clustering = new NaiveClustering<>(process::distance, process.threshold());
-        var start = Instant.now();
-        var executor = Executors.newFixedThreadPool(ForkJoinPool.getCommonPoolParallelism());
-        JsonArrayInput.process(input, e -> CompletableFuture.supplyAsync(
-                () -> process.process(e), executor).thenAccept(clustering::add));
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.MINUTES);
-        var end = Instant.now();
-        System.out.format("Clustering took %s\n", Duration.between(start, end));
-        var report = new Report<>(clustering.getClusters(), process::entry);
-        report.report(output, 20, 0.2);
-        report.outputClusterMappings(output);
+                            Process<T> process) throws IOException, InterruptedException, ExecutionException {
+        var processor = new BatchProcessor<T>(process, 16);
+        processor.run(input, output);
     }
 
     static void prepareOutputDirectory(Path output) throws IOException {
@@ -133,6 +132,10 @@ public class App {
     interface Process<T> {
         T process(LogEntry entry);
 
+        default List<T> batchProcess(List<LogEntry> batch) {
+            return batch.stream().map(this::process).toList();
+        }
+
         double distance(T t1, T t2);
 
         LogEntry entry(T t);
@@ -140,4 +143,63 @@ public class App {
         double threshold();
     }
 
+    record BatchProcessor<T>(Process<T> process, int batchSize) {
+        void run(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
+            var clustering = new NaiveClustering<>(process::distance, process.threshold());
+            var entryQueue = new ArrayBlockingQueue<LogEntry>(batchSize);
+            var processQueue = new ArrayBlockingQueue<List<T>>(batchSize);
+            var executors = Executors.newVirtualThreadPerTaskExecutor();
+            var start = Instant.now();
+
+            var parseTask = executors.submit(() ->  JsonArrayInput.process(
+                    input, entryQueue::put));
+
+            // feed input into a queue for possible parallel or batch processing
+            var batchTask = executors.submit(() -> {
+                var buffer = new ArrayList<LogEntry>(batchSize);
+                int items = 0;
+                while (true) {
+                    var entry = entryQueue.poll(40, TimeUnit.MILLISECONDS);
+                    if (entry != null) {
+                        buffer.add(entry);
+                    }
+                    if ((entry == null && !buffer.isEmpty()) || buffer.size() == batchSize) {
+                        items += buffer.size();
+                        processQueue.put(process.batchProcess(buffer));
+                        buffer.clear();
+                    }
+                    if (entry == null && parseTask.isDone() && entryQueue.isEmpty()) {
+                        return items;
+                    }
+                }
+            });
+
+            // collect batches and submit to processor
+            // then cluster results in single thread
+            var clusterTask = executors.submit(() -> {
+                int items = 0;
+                while (true) {
+                    var batch = processQueue.poll(40, TimeUnit.MILLISECONDS);
+                    if (batch == null) {
+                        if (batchTask.isDone() && processQueue.isEmpty()) {
+                            return items;
+                        }
+                    } else {
+                        items += batch.size();
+                        batch.forEach(clustering::add);
+                    }
+                }
+            });
+
+            var clusteredItems = clusterTask.get();
+            var end = Instant.now();
+            System.out.format("Clustering took %s\n", Duration.between(start, end));
+            System.out.println("Total messages: " + parseTask.get());
+            System.out.println("Total batched messages: " + batchTask.get());
+            System.out.println("Total clustered messages: " + clusteredItems);
+            var report = new Report<>(clustering.getClusters(), process::entry);
+            report.report(output, 20, 0.2);
+            report.outputClusterMappings(output);
+        }
+    }
 }

@@ -1,11 +1,14 @@
 package io.zeromagic.logclustering.vector;
 
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.DimensionAwareEmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.bgesmallenv15q.BgeSmallEnV15QuantizedEmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.e5smallv2q.E5SmallV2QuantizedEmbeddingModel;
 import io.zeromagic.logclustering.input.LogEntry;
 
+import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 public class EmbeddingProcess {
 
@@ -37,6 +40,23 @@ public class EmbeddingProcess {
     }
 
     public EmbeddingVector process(LogEntry logEntry) {
+        var text = makeQuery(logEntry);
+        var result = model.embed(text.toString());
+        tokenCount += result.tokenUsage().inputTokenCount();
+        return new EmbeddingVector(result.content().vector(), logEntry);
+    }
+
+    public List<EmbeddingVector> processBatch(List<LogEntry> batch) {
+        var segments = batch.stream().map(this::makeQuery).map(TextSegment::from)
+                .toList();
+        var result = model.embedAll(segments);
+        tokenCount += result.tokenUsage().inputTokenCount();
+        return IntStream.range(0, batch.size())
+                .mapToObj(i -> new EmbeddingVector(result.content().get(i).vector(), batch.get(i)))
+                .toList();
+    }
+
+    private String makeQuery(LogEntry logEntry) {
         // small progress indicator, because this is slow on CPU.
         if (++counter % 100 == 0) {
             System.out.printf("Processed entries: %d, token count: %d\n", counter, tokenCount);
@@ -47,12 +67,9 @@ public class EmbeddingProcess {
                 .append("logmessage of ").append(m.get("Pod"))
                 .append(" at ").append(m.get("TimeStamp"))
                 .append(" by logger ").append(m.get("LoggerName"))
-                .append("\n")
+                .append(": ")
                 .append(logEntry.body())
                 .append(logEntry.exception());
-
-        var result = model.embed(text.toString());
-        tokenCount += result.tokenUsage().inputTokenCount();
-        return new EmbeddingVector(result.content().vector(), logEntry);
+        return text.toString();
     }
 }

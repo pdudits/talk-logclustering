@@ -16,7 +16,11 @@ import java.util.function.Consumer;
 public class JsonArrayInput {
     private static final JsonParserFactory PARSER_FACTORY = JsonProvider.provider().createParserFactory(Map.of());
     private static final JsonObject EMPTY = Json.createObjectBuilder().build();
-    public static void process(Reader input, Consumer<LogEntry> consumer) {
+
+    public interface ThrowingConsumer<X extends Throwable> {
+        void accept(LogEntry entry) throws X;
+    }
+    public static <X extends Throwable> int process(Reader input, ThrowingConsumer<X> consumer) throws X {
         var parser = PARSER_FACTORY.createParser(input);
         var index = new AtomicInteger(0);
         while (parser.hasNext()) {
@@ -65,5 +69,6 @@ public class JsonArrayInput {
                 });
             }
         }
+        return index.get();
     }
 }
