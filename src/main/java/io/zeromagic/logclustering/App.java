@@ -66,7 +66,7 @@ public class App {
 
     static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException {
         prepareOutputDirectory(output);
-        var model = new EmbeddingProcess();
+        var model = new EmbeddingProcess(EmbeddingProcess.EmbeddingModel.BGESmall1_5Quantized);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
              var out = new EmbeddingOutput(embeddingFile);
         ) {
@@ -94,7 +94,7 @@ public class App {
 
                 @Override
                 public double threshold() {
-                    return 0.07;
+                    return 0.08;
                 }
             });
         }
@@ -139,4 +139,5 @@ public class App {
 
         double threshold();
     }
+
 }

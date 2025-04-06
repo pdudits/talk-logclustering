@@ -34,19 +34,19 @@ public class Report<T> {
             writeStats(reportWriter);
             writeStats(System.out);
 
-            var index = 0;
-            for (var cluster : clustering) {
+            var index = 1;
+            for (var cluster : clustering.reversed()) {
                 // pick at most sampleRate..maxExamples random examples from the cluster
                 var samples = Math.max(1, Math.min(Math.round(cluster.members().size() * sampleRate), maxExamples));
 
                 var writer = reportWriter;
 
-                writeExamples(cluster, samples, writer, index);
+                writeExamples(cluster, samples, writer, clustering.size()-index);
                 index++;
             }
         }
     }
-
+    
     private void writeStats(Appendable out) throws IOException {
         var totalMessages = clustering.stream().mapToInt(c -> c.members().size()).sum();
         var totalClusters = clustering.size();
@@ -90,7 +90,12 @@ public class Report<T> {
     }
 
     private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index) throws IOException {
-        writer.append("Cluster #%3d, size %6d\n-------------------------\n\n".formatted(index, cluster.members().size()));
+        // todo: min and max timestamp, do we just assume that input is sorted by time?
+        writer.append("\nCluster %d\n".formatted(index))
+              .append("Number of entries: %d\n".formatted(cluster.members().size()));
+        writer.append("First timestamp:   %s\nLast timestamp:    %s\n-----------------------------------------------\n\n".formatted(
+                entryExtractor.apply(cluster.members().getFirst()).metadata().get("Timestamp"),
+                entryExtractor.apply(cluster.members().getLast()).metadata().get("Timestamp")));
         IntStream.generate(() -> rand.nextInt(cluster.members().size()))
                 .distinct()
                 .limit(samples)
