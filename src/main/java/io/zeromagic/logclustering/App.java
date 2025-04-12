@@ -8,6 +8,7 @@ import io.zeromagic.logclustering.input.Tokenizer;
 import io.zeromagic.logclustering.naivecluster.NaiveClustering;
 import io.zeromagic.logclustering.vector.EmbeddingProcess;
 import io.zeromagic.logclustering.vector.EmbeddingVector;
+import io.zeromagic.logclustering.vector.OptimizedTermVector;
 import io.zeromagic.logclustering.vector.TermVector;
 
 import java.io.FileReader;
@@ -56,20 +57,20 @@ public class App {
 
     static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
-        process(input, output, new Process<TermVector>() {
+        process(input, output, new Process<OptimizedTermVector>() {
 
             @Override
-            public TermVector process(LogEntry entry) {
-                return TermVector.of(entry, Tokenizer.SIMPLE);
+            public OptimizedTermVector process(LogEntry entry) {
+                return OptimizedTermVector.of(entry, Tokenizer.SIMPLE);
             }
 
             @Override
-            public double distance(TermVector t1, TermVector t2) {
+            public double distance(OptimizedTermVector t1, OptimizedTermVector t2) {
                 return t1.cosineDistance(t2);
             }
 
             @Override
-            public LogEntry entry(TermVector termVector) {
+            public LogEntry entry(OptimizedTermVector termVector) {
                 return termVector.source();
             }
 

@@ -6,12 +6,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class NaiveClustering<T> {
+// Thread-safe version of naive clustering
+public class NaiveClusteringParallel<T> {
     private final Metric<T> metric;
     private final double threshold;
     private final List<Cluster<T>> clusters = new ArrayList<>();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    public NaiveClustering(Metric<T> metric, double threshold) {
+    public NaiveClusteringParallel(Metric<T> metric, double threshold) {
         this.metric = metric;
         this.threshold = threshold;
     }
@@ -20,19 +22,30 @@ public class NaiveClustering<T> {
         var bestMatch = findMatch(member);
         if (bestMatch.isPresent()) {
             bestMatch.get().members().add(member);
-        } else {
-            clusters.add(Cluster.of(member));
+        } else try {
+            lock.writeLock().lock();
+            // Check again in case another thread added a cluster
+            bestMatch = findMatch(member);
+            if (bestMatch.isPresent()) {
+                bestMatch.get().members().add(member);
+            } else {
+                clusters.add(Cluster.of(member));
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     private Optional<Cluster<T>> findMatch(T member) {
-        record DistanceTo(Cluster<?> cluster, double distance) {};
-        var bestMatch = clusters.parallelStream()
-                .map(c -> new DistanceTo(c, metric.distance(c.leader(), member)))
-                .min(Comparator.comparingDouble(DistanceTo::distance))
-                .filter(d -> d.distance() < threshold)
-                .map(d-> (Cluster<T>)d.cluster);
-        return bestMatch;
+        try {
+            lock.readLock().lock();
+            var bestMatch = clusters.parallelStream()
+                    .min(Comparator.comparingDouble(c -> metric.distance(c.leader(), member)))
+                    .filter(c -> metric.distance(c.leader(), member) < threshold);
+            return bestMatch;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
 
@@ -52,7 +65,7 @@ public class NaiveClustering<T> {
             if (stats.max() > threshold) {
                 // remove the cluster and add all members back to the list
                 it.remove();
-                var refinedClustering = new NaiveClustering<T>(metric, threshold);
+                var refinedClustering = new NaiveClusteringParallel<T>(metric, threshold);
                 cluster.members().forEach(refinedClustering::add);
                 refinedClustering.clusters.forEach(it::add);
             }
