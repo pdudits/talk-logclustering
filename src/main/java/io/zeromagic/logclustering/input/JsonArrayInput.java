@@ -15,25 +15,17 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
-public class JsonArrayInput implements Input {
+public record JsonArrayInput(Path source, Function<String,String> stackTraceStemmer) implements Input {
     private static final JsonParserFactory PARSER_FACTORY = JsonProvider.provider().createParserFactory(Map.of());
     private static final JsonObject EMPTY = Json.createObjectBuilder().build();
-    private final Path source;
 
-    public JsonArrayInput(Path source) {
-        this.source = source;
-    }
-
-    public interface ThrowingConsumer<X extends Throwable> {
-        void accept(LogEntry entry) throws X;
-    }
-    public static <X extends Throwable> int process(Reader input, ThrowingConsumer<X> consumer) throws X {
 
     @Override
-    public void produceTo(Consumer<LogEntry> consumer) throws IOException {
+    public <X extends Throwable> int produceTo(ThrowingConsumer<X> consumer) throws IOException,X {
         try (var reader = Files.newBufferedReader(source)) {
-            process(reader, consumer);
+            return process(reader, consumer);
         } catch (JsonParsingException e) {
             throw new IOException("Failed to parse JSON file: " + source, e);
         } catch (Exception e) {
@@ -41,6 +33,7 @@ public class JsonArrayInput implements Input {
         }
     }
 
+    private <X extends Throwable> int process(Reader input, ThrowingConsumer<X> consumer) throws X {
         var parser = PARSER_FACTORY.createParser(input);
         var index = new AtomicInteger(0);
         while (parser.hasNext()) {
@@ -60,6 +53,7 @@ public class JsonArrayInput implements Input {
                 var throwable = th; // make this effectively final
                 var entryIndex = index.getAndIncrement();
                 consumer.accept(new LogEntry() {
+                    private String stemmedStackTrace = null;
 
                     @Override
                     public String body() {
@@ -72,8 +66,12 @@ public class JsonArrayInput implements Input {
 
                     @Override
                     public String exception() {
+                        if (stemmedStackTrace != null) {
+                            return stemmedStackTrace;
+                        }
                         if (throwable.containsKey("StackTrace")) {
-                            return throwable.getString("StackTrace");
+                            stemmedStackTrace = stackTraceStemmer.apply(throwable.getString("StackTrace"));
+                            return stemmedStackTrace;
                         }
                         return null;
                     }

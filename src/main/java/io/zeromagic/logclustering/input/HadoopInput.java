@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,31 +19,33 @@ public class HadoopInput implements Input {
     }
 
     @Override
-    public void produceTo(Consumer<LogEntry> consumer) throws IOException {
-        Files.walk(source)
+    public <X extends Throwable> int produceTo(ThrowingConsumer<X> consumer) throws IOException, X {
+        return Files.walk(source)
                 .filter(Files::isRegularFile)
                 .filter(path -> path.toString().endsWith(".log"))
-                .forEach(path -> {
+                .mapToInt(path -> {
                     try (var reader = Files.newBufferedReader(path)) {
-                        process(path.getFileName().toString(), reader, consumer);
-                    } catch (Exception e) {
+                        return process(path.getFileName().toString(), reader, consumer);
+                    } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
-                });
+                })
+                .sum();
     }
 
     private static final Pattern TIMESTAMP_PATTERN = Pattern.compile(
             "^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3})\\s+(\\w+)\\s+\\[(.*?)\\]\\s+(\\S+):\\s+(.*)$");
 
-    private static void process(String filename, BufferedReader input, Consumer<LogEntry> consumer) throws IOException {
+    private static <X extends Throwable> int process(String filename, BufferedReader input, ThrowingConsumer<X> consumer) throws IOException, X {
         String line;
         LogEntryBuilder currentEntry = null;
-
+        int lines = 0;
         while ((line = input.readLine()) != null) {
             Matcher matcher = TIMESTAMP_PATTERN.matcher(line);
             if (matcher.matches()) {
                 // Push the previous entry to the consumer
                 if (currentEntry != null) {
+                    lines++;
                     consumer.accept(currentEntry.build());
                 }
 
@@ -60,6 +61,7 @@ public class HadoopInput implements Input {
             } else if (currentEntry != null) {
                 // Handle exception stack trace
                 if (line.isBlank()) {
+                    lines++;
                     consumer.accept(currentEntry.build());
                     currentEntry = null;
                 } else {
@@ -70,8 +72,10 @@ public class HadoopInput implements Input {
 
         // Push the last entry if it exists
         if (currentEntry != null) {
+            lines++;
             consumer.accept(currentEntry.build());
         }
+        return lines;
     }
 
     private static class LogEntryBuilder {
@@ -117,5 +121,4 @@ public class HadoopInput implements Input {
             };
         }
     }
-
 }

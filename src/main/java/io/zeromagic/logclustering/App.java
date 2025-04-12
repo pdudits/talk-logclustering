@@ -27,6 +27,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * Hello world!
@@ -36,13 +37,14 @@ public class App {
         var input = Path.of("../sensitive.data/25-03.json");
 
         var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
-        var in = new JsonArrayInput(input);
-        var in = new HadoopInput(Path.of("../sensitive.data/loghub-hadoop/"));
+        Function<String,String> stemmer = (String s) -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", "");
+        var in = new JsonArrayInput(input, stemmer);
+        //var in = new HadoopInput(Path.of("../sensitive.data/loghub-hadoop/"));
         termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
         //embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
     }
 
-    static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException {
+    static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         process(input, output, new Process<TermVector>() {
 
@@ -68,7 +70,7 @@ public class App {
         });
     }
 
-    static void embeddingProcess(Input input, Path output) throws IOException, InterruptedException {
+    static void embeddingProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         var model = new EmbeddingProcess(EmbeddingProcess.EmbeddingModel.BGESmall1_5Quantized);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
@@ -196,7 +198,10 @@ public class App {
             System.out.println("Total messages: " + parseTask.get());
             System.out.println("Total batched messages: " + batchTask.get());
             System.out.println("Total clustered messages: " + clusteredItems);
-            var report = new Report<>(clustering.getClusters(), process::entry);
+
+            clustering.refine(clusteredItems/12, 1.1);
+
+            var report = new Report<>(clustering.getClusters(), process::entry, process::distance);
             report.report(output, 20, 0.2);
             report.outputClusterMappings(output);
         }
