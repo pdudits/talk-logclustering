@@ -7,20 +7,40 @@ import jakarta.json.stream.JsonParser;
 import jakarta.json.stream.JsonParserFactory;
 import jakarta.json.stream.JsonParsingException;
 
+import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-public class JsonArrayInput {
+public class JsonArrayInput implements Input {
     private static final JsonParserFactory PARSER_FACTORY = JsonProvider.provider().createParserFactory(Map.of());
     private static final JsonObject EMPTY = Json.createObjectBuilder().build();
+    private final Path source;
+
+    public JsonArrayInput(Path source) {
+        this.source = source;
+    }
 
     public interface ThrowingConsumer<X extends Throwable> {
         void accept(LogEntry entry) throws X;
     }
     public static <X extends Throwable> int process(Reader input, ThrowingConsumer<X> consumer) throws X {
+
+    @Override
+    public void produceTo(Consumer<LogEntry> consumer) throws IOException {
+        try (var reader = Files.newBufferedReader(source)) {
+            process(reader, consumer);
+        } catch (JsonParsingException e) {
+            throw new IOException("Failed to parse JSON file: " + source, e);
+        } catch (Exception e) {
+            throw new IOException("Failed to read JSON file: " + source, e);
+        }
+    }
+
         var parser = PARSER_FACTORY.createParser(input);
         var index = new AtomicInteger(0);
         while (parser.hasNext()) {

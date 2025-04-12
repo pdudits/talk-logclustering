@@ -1,5 +1,6 @@
 package io.zeromagic.logclustering;
 
+import io.zeromagic.logclustering.input.Input;
 import io.zeromagic.logclustering.input.JsonArrayInput;
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;
@@ -32,17 +33,12 @@ import java.util.concurrent.TimeUnit;
 public class App {
     public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
         var input = Path.of("../sensitive.data/25-03.json");
-
-        var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
-        try (var in = new FileReader(input.toFile())) {
-            termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
-        }
-        try (var in = new FileReader(input.toFile())) {
-            //embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
-        }
+        var in = new JsonArrayInput(input);
+        termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
+        //embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
     }
 
-    static void termVectorProcess(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
+    static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException {
         prepareOutputDirectory(output);
         process(input, output, new Process<TermVector>() {
 
@@ -68,7 +64,7 @@ public class App {
         });
     }
 
-    static void embeddingProcess(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
+    static void embeddingProcess(Input input, Path output) throws IOException, InterruptedException {
         prepareOutputDirectory(output);
         var model = new EmbeddingProcess(EmbeddingProcess.EmbeddingModel.BGESmall1_5Quantized);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
@@ -109,7 +105,7 @@ public class App {
         }
     }
 
-    static <T> void process(FileReader input, Path output,
+    static <T> void process(Input input, Path output,
                             Process<T> process) throws IOException, InterruptedException, ExecutionException {
         var processor = new BatchProcessor<T>(process, 16);
         processor.run(input, output);
@@ -144,15 +140,14 @@ public class App {
     }
 
     record BatchProcessor<T>(Process<T> process, int batchSize) {
-        void run(FileReader input, Path output) throws IOException, InterruptedException, ExecutionException {
+        void run(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
             var clustering = new NaiveClustering<>(process::distance, process.threshold());
             var entryQueue = new ArrayBlockingQueue<LogEntry>(batchSize);
             var processQueue = new ArrayBlockingQueue<List<T>>(batchSize);
             var executors = Executors.newVirtualThreadPerTaskExecutor();
             var start = Instant.now();
 
-            var parseTask = executors.submit(() ->  JsonArrayInput.process(
-                    input, entryQueue::put));
+            var parseTask = executors.submit(() ->  input.produceTo(entryQueue::put));
 
             // feed input into a queue for possible parallel or batch processing
             var batchTask = executors.submit(() -> {
