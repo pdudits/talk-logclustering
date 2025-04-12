@@ -34,14 +34,24 @@ import java.util.function.Function;
  */
 public class App {
     public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
-        var input = Path.of("../sensitive.data/25-03.json");
-
+        Input in = null;
+        boolean terms = true;
+        boolean embeddings = true;
+        for(int i=0; i<args.length; i++) {
+            switch (args[i]) {
+                case "--no-terms" -> terms = false;
+                case "--no-embeddings" -> embeddings = false;
+                case "--hadoop" -> in = new HadoopInput(Path.of(args[++i]));
+                case "--loganalytics" -> in = new JsonArrayInput(Path.of(args[++i]), s -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", ""));
+            }
+        }
         var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
-        Function<String,String> stemmer = (String s) -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", "");
-        var in = new JsonArrayInput(input, stemmer);
-        //var in = new HadoopInput(Path.of("../sensitive.data/loghub-hadoop/"));
-        termVectorProcess(in, Path.of("target/termvector-clusters_" + timestamp + "/"));
-        //embeddingProcess(in, Path.of("target/embedding-cluster_" + timestamp + "/"));
+        if (terms) {
+            termVectorProcess(in, Path.of("target/termvector_" + timestamp + "/"));
+        }
+        if (embeddings) {
+            embeddingProcess(in, Path.of("target/embedding_" + timestamp + "/"));
+        }
     }
 
     static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
