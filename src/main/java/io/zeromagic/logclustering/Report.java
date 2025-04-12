@@ -2,6 +2,7 @@ package io.zeromagic.logclustering;
 
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.naivecluster.Cluster;
+import io.zeromagic.logclustering.naivecluster.Metric;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,10 +19,12 @@ public class Report<T> {
     private final List<Cluster<T>> clustering;
     private final Function<T, LogEntry> entryExtractor;
     private final Random rand = new Random();
+    private final Metric<T> metric;
 
-    public Report(List<Cluster<T>> clustering, Function<T, LogEntry> entryExtractor) {
+    public Report(List<Cluster<T>> clustering, Function<T, LogEntry> entryExtractor, Metric<T> metric) {
         this.clustering = new ArrayList<>(clustering);
         this.entryExtractor = entryExtractor;
+        this.metric = metric;
         Collections.sort(this.clustering, Comparator.comparingInt(c -> c.members().size()));
     }
 
@@ -41,7 +44,7 @@ public class Report<T> {
 
                 var writer = reportWriter;
 
-                writeExamples(cluster, samples, writer, clustering.size()-index);
+                writeExamples(cluster, samples, writer, clustering.size()-index, cluster.distributionStats(metric));
                 index++;
             }
         }
@@ -89,13 +92,15 @@ public class Report<T> {
         }
     }
 
-    private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index) throws IOException {
+    private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index, Cluster.Stats stats) throws IOException {
         // todo: min and max timestamp, do we just assume that input is sorted by time?
         writer.append("\nCluster %d\n".formatted(index))
               .append("Number of entries: %d\n".formatted(cluster.members().size()));
-        writer.append("First timestamp:   %s\nLast timestamp:    %s\n-----------------------------------------------\n\n".formatted(
+        writer.append("First timestamp:   %s\nLast timestamp:    %s\n".formatted(
                 entryExtractor.apply(cluster.members().getFirst()).metadata().get("Timestamp"),
                 entryExtractor.apply(cluster.members().getLast()).metadata().get("Timestamp")));
+        writer.append("Avg/ StdDev / Max: %f / %f / %f\n-----------------------------------------------\n\n".formatted(
+                stats.average(), stats.stdDev(), stats.max()));
         IntStream.generate(() -> rand.nextInt(cluster.members().size()))
                 .distinct()
                 .limit(samples)
