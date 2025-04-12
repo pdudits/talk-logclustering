@@ -99,8 +99,8 @@ public class Report<T> {
         writer.append("First timestamp:   %s\nLast timestamp:    %s\n".formatted(
                 entryExtractor.apply(cluster.members().getFirst()).metadata().get("Timestamp"),
                 entryExtractor.apply(cluster.members().getLast()).metadata().get("Timestamp")));
-        writer.append("Avg/ StdDev / Max: %f / %f / %f\n-----------------------------------------------\n\n".formatted(
-                stats.average(), stats.stdDev(), stats.max()));
+        writer.append("Avg/ StdDev / Max: %f / %f / %f = %.2f*stdev+avg\n----------------------------------------------------------\n\n".formatted(
+                stats.average(), stats.stdDev(), stats.max(), (stats.max()-stats.average())/stats.stdDev()));
         IntStream.generate(() -> rand.nextInt(cluster.members().size()))
                 .distinct()
                 .limit(samples)
