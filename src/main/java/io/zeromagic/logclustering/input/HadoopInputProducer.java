@@ -11,10 +11,10 @@ import java.util.regex.Pattern;
 /**
  * Input for hadoop log entries from LogPAI LogHub dataset.
  */
-public class HadoopInput implements Input {
+public class HadoopInputProducer implements InputProducer {
     private final Path source;
 
-    public HadoopInput(Path source) {
+    public HadoopInputProducer(Path source) {
         this.source = source;
     }
 

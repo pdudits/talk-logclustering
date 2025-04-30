@@ -14,10 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
-public record JsonArrayInput(Path source, Function<String,String> stackTraceStemmer) implements Input {
+public record JsonArrayInputProducer(Path source, Function<String,String> stackTraceStemmer) implements InputProducer {
     private static final JsonParserFactory PARSER_FACTORY = JsonProvider.provider().createParserFactory(Map.of());
     private static final JsonObject EMPTY = Json.createObjectBuilder().build();
 

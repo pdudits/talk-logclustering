@@ -1,17 +1,15 @@
 package io.zeromagic.logclustering;
 
-import io.zeromagic.logclustering.input.HadoopInput;
-import io.zeromagic.logclustering.input.Input;
-import io.zeromagic.logclustering.input.JsonArrayInput;
+import io.zeromagic.logclustering.input.HadoopInputProducer;
+import io.zeromagic.logclustering.input.InputProducer;
+import io.zeromagic.logclustering.input.JsonArrayInputProducer;
 import io.zeromagic.logclustering.input.LogEntry;
 import io.zeromagic.logclustering.input.Tokenizer;
 import io.zeromagic.logclustering.naivecluster.NaiveClustering;
 import io.zeromagic.logclustering.vector.EmbeddingProcess;
 import io.zeromagic.logclustering.vector.EmbeddingVector;
 import io.zeromagic.logclustering.vector.OptimizedTermVector;
-import io.zeromagic.logclustering.vector.TermVector;
 
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,27 +21,24 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 /**
  * Hello world!
  */
 public class App {
     public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
-        Input in = null;
+        InputProducer in = null;
         boolean terms = true;
         boolean embeddings = true;
         for(int i=0; i<args.length; i++) {
             switch (args[i]) {
                 case "--no-terms" -> terms = false;
                 case "--no-embeddings" -> embeddings = false;
-                case "--hadoop" -> in = new HadoopInput(Path.of(args[++i]));
-                case "--loganalytics" -> in = new JsonArrayInput(Path.of(args[++i]), s -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", ""));
+                case "--hadoop" -> in = new HadoopInputProducer(Path.of(args[++i]));
+                case "--loganalytics" -> in = new JsonArrayInputProducer(Path.of(args[++i]), s -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", ""));
             }
         }
         var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
@@ -55,7 +50,7 @@ public class App {
         }
     }
 
-    static void termVectorProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
+    static void termVectorProcess(InputProducer input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         process(input, output, new Process<OptimizedTermVector>() {
 
@@ -81,7 +76,7 @@ public class App {
         });
     }
 
-    static void embeddingProcess(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
+    static void embeddingProcess(InputProducer input, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
         var model = new EmbeddingProcess(EmbeddingProcess.EmbeddingModel.BGESmall1_5Quantized);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
@@ -122,7 +117,7 @@ public class App {
         }
     }
 
-    static <T> void process(Input input, Path output,
+    static <T> void process(InputProducer input, Path output,
                             Process<T> process) throws IOException, InterruptedException, ExecutionException {
         var processor = new BatchProcessor<T>(process, 16);
         processor.run(input, output);
@@ -157,7 +152,7 @@ public class App {
     }
 
     record BatchProcessor<T>(Process<T> process, int batchSize) {
-        void run(Input input, Path output) throws IOException, InterruptedException, ExecutionException {
+        void run(InputProducer input, Path output) throws IOException, InterruptedException, ExecutionException {
             var clustering = new NaiveClustering<>(process::distance, process.threshold());
             var entryQueue = new ArrayBlockingQueue<LogEntry>(batchSize);
             var processQueue = new ArrayBlockingQueue<List<T>>(batchSize);
