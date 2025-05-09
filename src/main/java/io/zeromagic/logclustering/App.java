@@ -86,17 +86,23 @@ public class App {
                 @Override
                 public EmbeddingVector process(LogEntry entry) {
                     var v = model.process(entry);
+                    writeEmbedding(v);
+                    return v;
+                }
+
+                private void writeEmbedding(EmbeddingVector v) {
                     try {
                         out.write(v, null);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                    return v;
                 }
 
                 @Override
                 public List<EmbeddingVector> batchProcess(List<LogEntry> batch) {
-                    return model.processBatch(batch);
+                    var embeddingBatch = model.processBatch(batch);
+                    embeddingBatch.forEach(this::writeEmbedding);
+                    return embeddingBatch;
                 }
 
                 @Override
@@ -111,7 +117,7 @@ public class App {
 
                 @Override
                 public double threshold() {
-                    return 0.08;
+                    return 0.18;
                 }
             });
         }
@@ -205,7 +211,8 @@ public class App {
             System.out.println("Total batched messages: " + batchTask.get());
             System.out.println("Total clustered messages: " + clusteredItems);
 
-            clustering.refine(clusteredItems/12, 1.1);
+            // refining didn't prove to improve the results that much
+            //clustering.refine(3000, 1.1);
 
             var report = new Report<>(clustering.getClusters(), process::entry, process::distance);
             report.report(output, 20, 0.2);
