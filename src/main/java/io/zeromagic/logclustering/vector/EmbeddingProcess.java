@@ -64,11 +64,11 @@ public class EmbeddingProcess {
         var m = logEntry.metadata();
         StringBuilder text = new StringBuilder()
                 .append(meta.prefix)
-                .append("logmessage of ").append(m.get("Pod"))
-                .append(" at ").append(m.get("TimeStamp"))
-                .append(" by logger ").append(m.get("LoggerName"))
-                .append(": ")
                 .append(logEntry.body())
+                .append("-- ").append(m.get(LogEntry.MetadataKeys.LEVEL)).append(" logmessage of [")
+                .append(m.get(LogEntry.MetadataKeys.POD))
+                .append("] at ").append(m.get(LogEntry.MetadataKeys.TIMESTAMP))
+                .append(" by [").append(m.get("LoggerName")).append("]\n")
                 .append(logEntry.exception());
         return text.toString();
     }
