@@ -1,0 +1,31 @@
+# Clutter to Clusters: Sample code for analyzing the log files
+
+Prerequisites:
+
+* Java 21
+* Maven
+
+## Obtaining the dataset
+
+For running the sample code against LogHub datasets, you need to download the dataset from the https://github.com/logpai/loghub[LogHub] repository, look for the Hadoop download link.
+Currently that points to https://zenodo.org/records/8196385/files/Hadoop.zip?download=1[this download location].
+
+No specific dataset for Payara logs on Azure is provided, but if you have similar application setup where Java application on Azure is outputting logs in Json format, you can use following query to obtain the logs:
+
+----
+az z monitor log-analytics query -w $workspaceId -t 30D -o json --analytics-query "KubePodInventory \
+ | where Namespace == '$namespace' \
+ | distinct ContainerID, Namespace, Name \
+ | join ContainerLog on ContainerID \
+ | where LogEntry startswith '{' \
+ | project TimeGenerated, Name, LogEntry, ContainerID \
+ | extend json = parse_json(LogEntry) \
+ | extend Timestamp = json.Timestamp, Level = json.Level, LoggerName = json.LoggerName, \
+          ThreadName = json.ThreadName, Throwable = json.Throwable, \
+          LogMessage = json.LogMessage \
+ | project TimeGenerated, Name, Level, LogMessage, Throwable, ThreadName, LoggerName, Timestamp \
+ | order by TimeGenerated asc"
+----
+
+If you're using `ContainterLogV2` your task is simpler, because you don't need to join to `KubePodInventory`.
+
