@@ -60,6 +60,7 @@ public class Report<T> {
         }
         var entryPercentile = new int[10];
         int runningTotal = 0;
+        var c = 0;
         for (var cluster : clustering) {
             runningTotal += cluster.members().size();
             int index = (totalMessages - runningTotal) * entryPercentile.length / totalMessages;
@@ -67,6 +68,9 @@ public class Report<T> {
                 entryPercentile[i]++;
             }
         }
+
+        var top9clusterSizes = clustering.reversed().stream().limit(9).mapToInt(v -> v.members().size()).toArray();
+        var restSize = totalMessages - IntStream.of(top9clusterSizes).sum();
 
         out.append("Total messages: %8d\n".formatted(totalMessages))
                 .append("Total clusters: %8d\n\n".formatted(totalClusters))
@@ -76,6 +80,15 @@ public class Report<T> {
         for (int i = 0; i < percentiles.length; i++) {
             out.append("| %9d%% | %12d | %18d |\n".formatted((i + 1) * 10, percentiles[i], entryPercentile[i]));
         }
+
+        // Finally print out 9 largest clusters
+        out.append("\n").append("""
+            | Rank | Cluster Size |
+            |------|--------------|\n""");
+        for(int i = 0; i < top9clusterSizes.length; i++) {
+            out.append("| %4d | %12d |\n".formatted(i+1, top9clusterSizes[i]));
+        }
+        out.append("| rest | %12d |\n".formatted(restSize));
     }
 
     public void outputClusterMappings(Path output) throws IOException {
@@ -94,11 +107,15 @@ public class Report<T> {
 
     private void writeExamples(Cluster<T> cluster, long samples, Appendable writer, int index, Cluster.Stats stats) throws IOException {
         // todo: min and max timestamp, do we just assume that input is sorted by time?
+        var minTimestamp = cluster.members().stream().map(entryExtractor).map(e -> e.metadata().get("Timestamp"))
+                .min(Comparator.naturalOrder()).orElse("n/a");
+        var maxTimestamp = cluster.members().stream().map(entryExtractor).map(e -> e.metadata().get("Timestamp"))
+                .max(Comparator.naturalOrder()).orElse("n/a");
         writer.append("\nCluster %d\n".formatted(index))
               .append("Number of entries: %d\n".formatted(cluster.members().size()));
         writer.append("First timestamp:   %s\nLast timestamp:    %s\n".formatted(
-                entryExtractor.apply(cluster.members().getFirst()).metadata().get("Timestamp"),
-                entryExtractor.apply(cluster.members().getLast()).metadata().get("Timestamp")));
+                minTimestamp,
+                maxTimestamp));
         writer.append("Avg/ StdDev / Max: %f / %f / %f = %.2f*stdev+avg\n----------------------------------------------------------\n\n".formatted(
                 stats.average(), stats.stdDev(), stats.max(), (stats.max()-stats.average())/stats.stdDev()));
         IntStream.generate(() -> rand.nextInt(cluster.members().size()))
