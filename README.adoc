@@ -29,3 +29,61 @@ az z monitor log-analytics query -w $workspaceId -t 30D -o json --analytics-quer
 
 If you're using `ContainterLogV2` your task is simpler, because you don't need to join to `KubePodInventory`.
 
+## Running the sample code
+
+Build the project using Maven:
+
+----
+mvn package
+----
+
+Executable jar file with dependencies is created in `target/logclustering`.
+
+----
+$ java -jar ./target/logclustering/logclustering.jar --terms --hadoop ../data/loghub-hadoop/
+
+Clustering took PT18.5637288S
+Total messages: 180896
+Total batched messages: 180896
+Total clustered messages: 180896
+Total messages:   180896
+Total clusters:      121
+
+| Percentile | Cluster Size | Number of clusters |
+|------------|--------------|--------------------|
+|        10% |            6 |                  1 |
+|        20% |           25 |                  1 |
+|        30% |           68 |                  2 |
+|        40% |           79 |                  4 |
+|        50% |          154 |                  7 |
+|        60% |          531 |                 10 |
+|        70% |          899 |                 13 |
+|        80% |         1399 |                 20 |
+|        90% |         4436 |                 34 |
+|       100% |        45886 |                121 |
+
+| Rank | Cluster Size |
+|------|--------------|
+|    1 |        45886 |
+|    2 |        18160 |
+|    3 |         6906 |
+|    4 |         6790 |
+|    5 |         6325 |
+|    6 |         6171 |
+|    7 |         6171 |
+|    8 |         5810 |
+|    9 |         5795 |
+| rest |        72882 |
+----
+
+And report is created in new directory under `target/`.
+
+### Supported arguments
+
+`--terms`:: run clustering on terms
+`--embeddings`:: run clustering on embeddings
+`--hadoop`:: path to the directory with hadoop log files
+`--loganalytics`:: path to json file with log analytics output
++
+NOTE: note that parser expects quite specific format, so you may want to modify parser to match your exact output.
+

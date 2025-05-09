@@ -31,12 +31,12 @@ import java.util.concurrent.TimeUnit;
 public class App {
     public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
         InputProducer in = null;
-        boolean terms = true;
-        boolean embeddings = true;
+        boolean terms = false;
+        boolean embeddings = false;
         for(int i=0; i<args.length; i++) {
             switch (args[i]) {
-                case "--no-terms" -> terms = false;
-                case "--no-embeddings" -> embeddings = false;
+                case "--terms" -> terms = true;
+                case "--embeddings" -> embeddings = true;
                 case "--hadoop" -> in = new HadoopInputProducer(Path.of(args[++i]));
                 case "--loganalytics" -> in = new JsonArrayInputProducer(Path.of(args[++i]), s -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", ""));
             }
@@ -47,6 +47,19 @@ public class App {
         }
         if (embeddings) {
             embeddingProcess(in, Path.of("target/embedding_" + timestamp + "/"));
+        }
+        if (!terms && !embeddings) {
+            System.out.println("""
+                    Usage: java -jar logclustering.jar [--terms|--embeddings] < --hadoop <directory> | --loganalytics <json file>>
+                    
+                    --terms: process log entries into term vectors
+                    --embeddings: process log entries into embeddings
+                    --hadoop: process log entries from directory Hadoop log files
+                    --loganalytics: process log entries from a JSON file in LogAnalytics format
+                    
+                    The output will be written to target/termvector_<timestamp> or target/embedding_<timestamp>
+                    """);
+            System.exit(1);
         }
     }
 
