@@ -10,21 +10,21 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-public class EmbeddingProcess {
+public class Embedding {
 
     private final DimensionAwareEmbeddingModel model;
-    private final EmbeddingModel meta;
+    private final Model meta;
     private int counter = 0;
     private int tokenCount = 0;
 
-    public enum EmbeddingModel {
+    public enum Model {
         E5SmallV2Quantized(E5SmallV2QuantizedEmbeddingModel::new, "query:"),
         BGESmall1_5Quantized(BgeSmallEnV15QuantizedEmbeddingModel::new, "Represent this sentence for searching relevant passages: ");
 
         private final Supplier<DimensionAwareEmbeddingModel> factory;
         private final String prefix;
 
-        EmbeddingModel(Supplier<DimensionAwareEmbeddingModel> factory, String prefix) {
+        Model(Supplier<DimensionAwareEmbeddingModel> factory, String prefix) {
             this.factory = factory;
             this.prefix = prefix;
         }
@@ -34,7 +34,7 @@ public class EmbeddingProcess {
         }
     }
 
-    public EmbeddingProcess(EmbeddingModel model) {
+    public Embedding(Model model) {
         this.meta = model;
         this.model = model.create();
     }
