@@ -21,12 +21,27 @@ public class App {
         InputProducer in = null;
         boolean terms = false;
         boolean embeddings = false;
+        Embedding.Model model = Embedding.Model.E5SmallV2Quantized;
         for(int i=0; i<args.length; i++) {
             switch (args[i]) {
                 case "--terms" -> terms = true;
-                case "--embeddings" -> embeddings = true;
+                case "--embeddings" -> {
+                    embeddings = true;
+                    if (i + 1 < args.length) {
+                        try {
+                            model = Embedding.Model.valueOf(args[i+1]);
+                            i++;
+                        } catch (IllegalArgumentException iae) {
+                            // well it wasn't a model name then.
+                        }
+                    }
+                }
                 case "--hadoop" -> in = new HadoopInputProducer(Path.of(args[++i]));
                 case "--loganalytics" -> in = new JsonArrayInputProducer(Path.of(args[++i]), s -> s.replaceAll("\\n\\s+at (?!fish.payara.cloud).+", ""));
+                default -> {
+                    System.err.println("Unknown argument: " + args[i]);
+                    System.exit(1);
+                }
             }
         }
         var timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(OffsetDateTime.now());
@@ -34,11 +49,11 @@ public class App {
             termVectorPipeline(in, Path.of("target/termvector_" + timestamp + "/"));
         }
         if (embeddings) {
-            embeddingPipeline(in, Path.of("target/embedding_" + timestamp + "/"));
+            embeddingPipeline(in, model, Path.of("target/embedding_" + timestamp + "/"));
         }
         if (!terms && !embeddings) {
             System.out.println("""
-                    Usage: java -jar logclustering.jar [--terms|--embeddings] < --hadoop <directory> | --loganalytics <json file>>
+                    Usage: java -jar logclustering.jar [--terms|--embeddings [model name] < --hadoop <directory> | --loganalytics <json file>>
                     
                     --terms: process log entries into term vectors
                     --embeddings: process log entries into embeddings
@@ -47,6 +62,10 @@ public class App {
                     
                     The output will be written to target/termvector_<timestamp> or target/embedding_<timestamp>
                     """);
+            System.out.println("Valid embedding names: ");
+            for (var modelName : Embedding.Model.values()) {
+                System.out.println("  - " + modelName.name());
+            }
             System.exit(1);
         }
     }
@@ -56,9 +75,10 @@ public class App {
         runPipeline(input, output, TermVectorAdapter.INSTANCE);
     }
 
-    static void embeddingPipeline(InputProducer input, Path output) throws IOException, InterruptedException, ExecutionException {
+    static void embeddingPipeline(InputProducer input, Embedding.Model modelKind, Path output) throws IOException, InterruptedException, ExecutionException {
         prepareOutputDirectory(output);
-        var model = new Embedding(Embedding.Model.BGESmall1_5Quantized);
+        System.out.println("Using embedding model: " + modelKind.name());
+        var model = new Embedding(modelKind);
         try (var embeddingFile = new FileWriter(output.resolve("embeddings.json").toFile());
              var out = new EmbeddingOutput(embeddingFile);
         ) {
@@ -68,7 +88,7 @@ public class App {
 
     static <T> void runPipeline(InputProducer input, Path output,
                                 VectorAdapter<T> process) throws IOException, InterruptedException, ExecutionException {
-        var pipeline = new Pipeline<T>(process, 16);
+        var pipeline = new Pipeline<T>(process, 128);
         pipeline.run(input, output);
     }
 

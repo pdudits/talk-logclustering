@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 record Pipeline<T>(VectorAdapter<T> adapter, int batchSize) {
@@ -64,16 +66,32 @@ record Pipeline<T>(VectorAdapter<T> adapter, int batchSize) {
 
         var clusteredItems = clusterTask.get();
         var end = Instant.now();
+        var ok = checkForFailure("Parsing", parseTask);
+        ok = ok | checkForFailure("Vectorization", batchTask);
+        ok = ok | checkForFailure("Clustering", clusterTask);
+        if (!ok) {
+            System.out.println("Pipeline failed");
+            System.exit(1);
+        }
         System.out.format("Clustering took %s\n", Duration.between(start, end));
-        System.out.println("Total messages: " + parseTask.get());
-        System.out.println("Total batched messages: " + batchTask.get());
-        System.out.println("Total clustered messages: " + clusteredItems);
-
         // refining didn't prove to improve the results that much
         //clustering.refine(3000, 1.1);
 
         var report = new Report<>(clustering.getClusters(), adapter::entry, adapter::distance);
         report.report(output, 20, 0.2);
         report.outputClusterMappings(output);
+    }
+
+    private boolean checkForFailure(String kind, Future<Integer> task) throws ExecutionException, InterruptedException {
+        switch (task.state()) {
+            case SUCCESS -> System.out.format("%s processed messages: %d\n", kind, task.get());
+            case CANCELLED -> System.out.format("%s cancelled\n", kind);
+            case FAILED -> {
+                System.out.format("%s failed\n", kind);
+                task.exceptionNow().printStackTrace(System.err);
+            }
+            case RUNNING -> System.out.format("%s got stuck\n", kind);
+        }
+        return task.state() == FutureTask.State.SUCCESS;
     }
 }

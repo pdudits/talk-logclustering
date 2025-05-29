@@ -50,6 +50,6 @@ class EmbeddingVectorAdapter implements VectorAdapter<EmbeddingVector> {
 
     @Override
     public double threshold() {
-        return 0.18;
+        return model.threshold();
     }
 }
